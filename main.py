@@ -2,6 +2,24 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import socket
+import threading
+
+# 在 main() 函数开始处添加：
+def tcp_health_check():
+    """简单的TCP健康检查服务器"""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('0.0.0.0', 8080))
+    sock.listen(1)
+    print("🔌 TCP健康检查服务器启动在端口 8080")
+    
+    while True:
+        conn, addr = sock.accept()
+        conn.close()
+
+# 启动TCP服务器线程
+tcp_thread = threading.Thread(target=tcp_health_check, daemon=True)
+tcp_thread.start()
 
 # 1. 从环境变量获取Token
 TOKEN = os.environ.get('TOKEN')
