@@ -1,4 +1,4 @@
-# 使用Python 3.10
+# 使用 Python 3.10
 FROM python:3.10-slim
 
 # 设置工作目录
@@ -14,14 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 运行应用
-
-CMD ["python", "main.py"]
-
-#端口
-FROM python:3.10-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8080
 CMD ["python", "main.py"]
