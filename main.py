@@ -97,6 +97,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /admin - 管理员功能（如有权限）
 
 💡 试试发送任意消息，我会回应你！
+客服@TelegramSheng
+客服@WIBSIBKB
     """
     await update.message.reply_text(welcome_text)
 
@@ -134,12 +136,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - 发送"时间"或"time"
 - 发送"日期"或"date"
 - 发送其他消息我会智能回复
-
-🔧 技术特性：
-- ✅ 用户数据持久化
-- ✅ 消息历史记录
-- ✅ 使用统计分析
-- ✅ 健康检查监控
     """
     await update.message.reply_text(help_text)
 
