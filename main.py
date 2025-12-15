@@ -11,8 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 导入数据库模块
-from database import DatabaseManager
-
 # 在 main() 函数开始处添加：
 def tcp_health_check():
     """简单的TCP健康检查服务器"""
@@ -328,6 +326,7 @@ def main():
     # 初始化数据库
     if DATABASE_URL:
         try:
+            from database import DatabaseManager
             DatabaseManager.initialize()
             print("✅ 数据库连接成功")
         except Exception as e:
