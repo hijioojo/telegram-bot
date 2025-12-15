@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
-# 导入数据库模块
+# 删除顶部的错误导入语句：from database import DatabaseManager
+
 # 在 main() 函数开始处添加：
 def tcp_health_check():
     """简单的TCP健康检查服务器"""
@@ -30,6 +31,9 @@ tcp_thread.start()
 # 1. 从环境变量获取Token和配置
 TOKEN = os.environ.get('TOKEN')
 DATABASE_URL = os.environ.get('DATABASE_URL')
+
+# 修改点 1: 定义一个全局变量，用于存储数据库管理器
+DB_MANAGER = None
 
 if not TOKEN:
     print("❌ 错误：没有找到TOKEN环境变量！")
@@ -60,9 +64,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
     # 保存用户信息到数据库
-    if DATABASE_URL:
+    # 修改点 2: 检查 DATABASE_URL 和 DB_MANAGER 是否可用
+    if DATABASE_URL and DB_MANAGER is not None:
         try:
-            DatabaseManager.save_user({
+            DB_MANAGER.save_user({  # 修改点 3: 使用 DB_MANAGER 而非 DatabaseManager
                 'id': user.id,
                 'username': user.username,
                 'first_name': user.first_name,
@@ -72,10 +77,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             })
             
             # 保存消息记录
-            DatabaseManager.save_message(user.id, chat_id, '/start', is_command=True)
-            
+            DB_MANAGER.save_message(user.id, chat_id, '/start', is_command=True)  # 修改点
             # 更新命令统计
-            DatabaseManager.update_command_stats(user.id, '/start')
+            DB_MANAGER.update_command_stats(user.id, '/start')  # 修改点
             
             logger.info(f"✅ 用户 {user.id} ({user.username}) 启动机器人")
         except Exception as e:
@@ -105,10 +109,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
     
-    if DATABASE_URL:
+    # 修改点 4: 统一使用 DB_MANAGER 和可用性检查
+    if DATABASE_URL and DB_MANAGER is not None:
         try:
-            DatabaseManager.save_message(user.id, chat_id, '/help', is_command=True)
-            DatabaseManager.update_command_stats(user.id, '/help')
+            DB_MANAGER.save_message(user.id, chat_id, '/help', is_command=True)
+            DB_MANAGER.update_command_stats(user.id, '/help')
         except Exception as e:
             logger.error(f"❌ 数据库操作失败: {e}")
     
@@ -142,10 +147,10 @@ async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
     
-    if DATABASE_URL:
+    if DATABASE_URL and DB_MANAGER is not None:
         try:
-            DatabaseManager.save_message(user.id, chat_id, '/ping', is_command=True)
-            DatabaseManager.update_command_stats(user.id, '/ping')
+            DB_MANAGER.save_message(user.id, chat_id, '/ping', is_command=True)
+            DB_MANAGER.update_command_stats(user.id, '/ping')
         except Exception as e:
             logger.error(f"❌ 数据库操作失败: {e}")
     
@@ -156,12 +161,12 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """查看用户统计"""
     user = update.effective_user
     
-    if not DATABASE_URL:
-        await update.message.reply_text("📊 数据库未配置，统计功能不可用")
+    if not DATABASE_URL or DB_MANAGER is None:  # 修改点
+        await update.message.reply_text("📊 数据库未配置或不可用，统计功能不可用")
         return
     
     try:
-        stats = DatabaseManager.get_user_stats(user.id)
+        stats = DB_MANAGER.get_user_stats(user.id)  # 修改点
         
         if stats:
             response = f"""
@@ -187,7 +192,7 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response, parse_mode='Markdown')
         
         # 记录此命令
-        DatabaseManager.save_message(user.id, update.effective_chat.id, '/stats', is_command=True)
+        DB_MANAGER.save_message(user.id, update.effective_chat.id, '/stats', is_command=True)  # 修改点
         
     except Exception as e:
         logger.error(f"❌ 获取统计失败: {e}")
@@ -203,12 +208,12 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #     await update.message.reply_text("⛔ 权限不足")
     #     return
     
-    if not DATABASE_URL:
-        await update.message.reply_text("📊 数据库未配置，管理员功能不可用")
+    if not DATABASE_URL or DB_MANAGER is None:  # 修改点
+        await update.message.reply_text("📊 数据库未配置或不可用，管理员功能不可用")
         return
     
     try:
-        bot_stats = DatabaseManager.get_bot_stats()
+        bot_stats = DB_MANAGER.get_bot_stats()  # 修改点
         
         response = f"""
 🤖 *机器人全局统计*
@@ -241,9 +246,9 @@ async def echo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = ' '.join(context.args)
         await update.message.reply_text(f"🔊 回声: {text}")
         
-        if DATABASE_URL:
+        if DATABASE_URL and DB_MANAGER is not None:  # 修改点
             try:
-                DatabaseManager.save_message(user.id, update.effective_chat.id, f'/echo {text}', is_command=True)
+                DB_MANAGER.save_message(user.id, update.effective_chat.id, f'/echo {text}', is_command=True)  # 修改点
             except Exception as e:
                 logger.error(f"❌ 数据库操作失败: {e}")
     else:
@@ -257,9 +262,9 @@ async def smart_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
     # 保存消息到数据库
-    if DATABASE_URL:
+    if DATABASE_URL and DB_MANAGER is not None:  # 修改点
         try:
-            DatabaseManager.save_message(user.id, chat_id, user_message)
+            DB_MANAGER.save_message(user.id, chat_id, user_message)  # 修改点
         except Exception as e:
             logger.error(f"❌ 保存消息失败: {e}")
     
@@ -321,6 +326,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # 11. 主函数
 def main():
+    global DB_MANAGER  # 修改点 5: 声明我们要修改全局变量 DB_MANAGER
+
     print("🚀 正在启动机器人...")
     
     # 初始化数据库
@@ -328,6 +335,7 @@ def main():
         try:
             from database import DatabaseManager
             DatabaseManager.initialize()
+            DB_MANAGER = DatabaseManager  # 修改点 6: 将类赋值给全局变量
             print("✅ 数据库连接成功")
         except Exception as e:
             print(f"❌ 数据库初始化失败: {e}")
@@ -358,7 +366,7 @@ def main():
     
     print("=" * 50)
     print("✅ 机器人启动完成！")
-    print(f"📊 运行模式: {'数据库模式' if DATABASE_URL else '内存模式'}")
+    print(f"📊 运行模式: {'数据库模式' if DATABASE_URL and DB_MANAGER is not None else '内存模式'}")
     print("=" * 50)
     
     # 启动机器人
@@ -369,8 +377,8 @@ def main():
     )
     
     # 机器人停止时关闭数据库连接
-    if DATABASE_URL:
-        DatabaseManager.close_all_connections()
+    if DB_MANAGER is not None:  # 修改点 7: 使用全局变量判断
+        DB_MANAGER.close_all_connections()
 
 if __name__ == '__main__':
     main()
