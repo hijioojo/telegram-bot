@@ -98,6 +98,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /stats - 查看你的使用统计
 /admin - 管理员功能（如有权限）
 
+💰 积分命令：
+/sign - 每日签到获取1积分
+/points - 查看我的积分详情
+/rank - 查看积分排行榜
+
 💡 试试发送任意消息，我会回应你！
 客服@TelegramSheng
 客服@WIBSIBKB
@@ -118,29 +123,47 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"❌ 数据库操作失败: {e}")
     
     help_text = """
-📚 可用命令：
+🤖 *机器人命令手册*
 
-🔹 基础命令
+🎯 *基础命令*
 /start - 开始使用机器人
 /help - 查看此帮助信息
 /ping - 测试机器人是否在线
 
-📊 统计命令
-/stats - 查看你的使用统计
-/rank - 查看活跃度排名（如有数据）
+💰 *积分签到系统*
+/sign - 每日签到获取积分（每天一次）
+/points - 查看我的积分详情
+/rank - 查看积分排行榜
+/leaderboard - 排行榜（/rank 的别名）
 
-🛠️ 功能命令
+📊 *统计命令*
+/stats - 查看你的使用统计
+
+🛠️ *功能命令*
 /echo <文本> - 回声测试
 /time - 显示当前时间
-/weather <城市> - 查询天气（待实现）
 
-💬 自动回复：
-- 发送"你好"或"hi"
-- 发送"时间"或"time"
-- 发送"日期"或"date"
-- 发送其他消息我会智能回复
+🎮 *积分规则*
+• 每日签到：+1 基础积分
+• 连续3天：额外 +1 积分
+• 连续7天：额外 +2 积分
+• 每天只能签到一次
+• 午夜后重置签到机会
+
+💬 *智能聊天*
+直接发送消息，我会智能回复：
+- 你好、hi、hello
+- 时间、几点
+- 日期、今天几号
+- 其他消息我会随机回复
+
+📞 *客服联系*
+@TelegramSheng
+@WIBSIBKB
+
+💡 *提示*：使用 /sign 开始你的签到之旅吧！
     """
-    await update.message.reply_text(help_text)
+    await update.message.reply_text(help_text, parse_mode='Markdown')
 
 # 5. 处理 /ping 命令
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -254,7 +277,291 @@ async def echo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("用法: /echo <文本>")
 
-# 9. 改进的智能回复函数
+# 9. 新增：处理 /sign 命令 - 每日签到
+async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /sign 命令 - 每日签到"""
+    user = update.effective_user
+    
+    if not DATABASE_URL or DB_MANAGER is None:
+        await update.message.reply_text("❌ 数据库未配置，签到功能不可用")
+        return
+    
+    try:
+        # 执行签到
+        success, message, points_awarded = DB_MANAGER.daily_sign_in(
+            telegram_id=user.id,
+            username=user.username,
+            first_name=user.first_name
+        )
+        
+        if success:
+            # 获取签到后的详细信息
+            points_info = DB_MANAGER.get_user_points_info(user.id)
+            
+            if points_info:
+                # 构建成功响应
+                from datetime import datetime
+                now = datetime.now()
+                
+                # 根据连续天数选择不同的表情
+                streak = points_info.get('current_streak', 1)
+                if streak == 1:
+                    streak_emoji = "🎯"
+                    encouragement = "这是你的第一次签到，坚持就是胜利！"
+                elif streak <= 3:
+                    streak_emoji = "🔥"
+                    encouragement = "良好的开始是成功的一半！"
+                elif streak <= 7:
+                    streak_emoji = "⚡"
+                    encouragement = "连续签到，习惯正在养成！"
+                elif streak <= 30:
+                    streak_emoji = "🏆"
+                    encouragement = "惊人的毅力，继续加油！"
+                else:
+                    streak_emoji = "👑"
+                    encouragement = "你是签到王者，无人能敌！"
+                
+                # 检查是否有连续签到奖励
+                base_points = 1
+                bonus_points = points_awarded - base_points
+                
+                response = f"""
+{streak_emoji} *签到成功！*
+
+👤 {user.first_name}，签到成功！
+
+💰 *积分详情*
+├ 基础奖励: +{base_points} 分
+{f"├ 连续签到奖励: +{bonus_points} 分" if bonus_points > 0 else ""}
+└ 本次获得: **+{points_awarded} 分**
+
+📊 *签到统计*
+├ 当前积分: **{points_info.get('total_points', 0)} 分**
+├ 连续签到: {streak} 天 {streak_emoji}
+├ 总签到次数: {points_info.get('sign_in_count', 1)} 次
+└ 今日排名: 第 {points_info.get('rank', 1)} 名
+
+⏰ *时间信息*
+├ 签到时间: {now.strftime('%Y-%m-%d %H:%M:%S')}
+└ 下次签到: 明天 {now.strftime('%H:%M')} 后
+
+{encouragement}
+
+💡 使用 /points 查看详细积分
+💎 使用 /rank 查看排行榜
+                """
+            else:
+                response = f"""
+✅ 签到成功！
+获得 {points_awarded} 积分！
+
+{message}
+
+使用 /points 查看你的积分详情。
+                """
+        else:
+            # 签到失败（可能已经签到过）
+            points_info = DB_MANAGER.get_user_points_info(user.id)
+            
+            if points_info and points_info.get('signed_in_today'):
+                last_sign = points_info.get('last_sign_in')
+                last_time = last_sign.strftime('%H:%M:%S') if last_sign else "未知时间"
+                
+                response = f"""
+⏰ *签到提醒*
+
+{user.first_name}，你今天已经签到过了哦！
+
+📅 签到时间: {last_time}
+💰 当前积分: **{points_info.get('total_points', 0)} 分**
+🔥 连续签到: {points_info.get('current_streak', 0)} 天
+
+💡 明天记得再来签到！
+⏳ 下次可签到: 明天 00:00 后
+                """
+            else:
+                response = f"❌ {message}"
+        
+        await update.message.reply_text(response, parse_mode='Markdown')
+        
+        # 保存消息记录
+        if DB_MANAGER:
+            DB_MANAGER.save_message(user.id, update.effective_chat.id, '/sign', is_command=True)
+        
+    except Exception as e:
+        logger.error(f"❌ 处理签到命令失败: {e}")
+        await update.message.reply_text("❌ 签到失败，系统错误，请稍后重试")
+
+# 10. 新增：处理 /points 命令 - 查看积分详情
+async def points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /points 命令 - 查看积分详情"""
+    user = update.effective_user
+    
+    if not DATABASE_URL or DB_MANAGER is None:
+        await update.message.reply_text("❌ 数据库未配置，积分功能不可用")
+        return
+    
+    try:
+        # 获取积分信息
+        points_info = DB_MANAGER.get_user_points_info(user.id)
+        
+        if not points_info:
+            response = f"""
+💰 *积分详情*
+
+👤 {user.first_name}，你还没有积分记录。
+
+💡 使用 /sign 进行每日签到，获得积分！
+🎯 每天只能签到一次，每次获得1积分
+✨ 连续签到还有额外奖励！
+            """
+        else:
+            # 构建积分详情响应
+            signed_today = "✅ 今日已签到" if points_info.get('signed_in_today') else "⏳ 今日未签到"
+            last_sign = points_info.get('last_sign_in')
+            last_sign_str = last_sign.strftime('%Y-%m-%d %H:%M') if last_sign else "从未签到"
+            
+            # 构建最近7天签到日历
+            recent_sign_ins = points_info.get('recent_sign_ins', [])
+            week_calendar = []
+            for i in range(6, -1, -1):
+                sign_date = None
+                for sign_in in recent_sign_ins:
+                    if sign_in['display_date'] == 'today' and i == 0:
+                        sign_date = '✅'
+                        break
+                    elif sign_in['display_date'] == 'yesterday' and i == 1:
+                        sign_date = '✓'
+                        break
+                if not sign_date:
+                    sign_date = '○'
+                week_calendar.append(sign_date)
+            
+            response = f"""
+💰 *积分详情*
+
+👤 **{user.first_name}** (@{user.username or '无用户名'})
+
+📊 *积分概览*
+├ 总积分: **{points_info.get('total_points', 0)} 分**
+├ 签到次数: {points_info.get('sign_in_count', 0)} 次
+├ 当前连胜: {points_info.get('current_streak', 0)} 天
+├ 最高连胜: {points_info.get('max_streak', 0)} 天
+├ 今日状态: {signed_today}
+└ 上次签到: {last_sign_str}
+
+📈 *最近7天签到日历*
+{" ".join(week_calendar)}
+← 最近7天
+✓=已签 ○=未签 ✅=今日
+
+🏆 *排行榜*
+当前排名: 第 {points_info.get('rank', 1)} 名
+
+📝 *最近积分变动*
+"""
+        
+            # 添加最近积分记录
+            recent_transactions = points_info.get('recent_transactions', [])
+            if recent_transactions:
+                for trans in recent_transactions:
+                    change = trans['points_change']
+                    change_str = f"+{change}" if change > 0 else f"{change}"
+                    reason_map = {
+                        'sign_in': '每日签到',
+                        'sign_in_streak_3': '连续3天奖励',
+                        'sign_in_streak_7': '连续7天奖励'
+                    }
+                    reason = reason_map.get(trans['reason'], trans.get('description', trans['reason']))
+                    response += f"• {trans['time_str']} {change_str} 分 ({reason})\n"
+            else:
+                response += "暂无积分记录\n"
+        
+            # 添加提示信息
+            if not points_info.get('signed_in_today'):
+                response += f"\n🎯 使用 /sign 进行今日签到，获得积分！"
+            else:
+                response += f"\n💡 每天坚持签到，积分越来越多！"
+        
+        await update.message.reply_text(response, parse_mode='Markdown')
+        
+        # 保存消息记录
+        if DB_MANAGER:
+            DB_MANAGER.save_message(user.id, update.effective_chat.id, '/points', is_command=True)
+        
+    except Exception as e:
+        logger.error(f"❌ 查询积分失败: {e}")
+        await update.message.reply_text("❌ 查询积分失败，请稍后再试")
+
+# 11. 新增：处理 /rank 命令 - 查看积分排行榜
+async def rank_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /rank 命令 - 查看积分排行榜"""
+    user = update.effective_user
+    
+    if not DATABASE_URL or DB_MANAGER is None:
+        await update.message.reply_text("❌ 数据库未配置，排行榜功能不可用")
+        return
+    
+    try:
+        # 获取排行榜
+        top_users = DB_MANAGER.get_top_users(limit=10)
+        
+        if not top_users:
+            response = """
+🏆 *积分排行榜*
+
+暂无用户数据。
+
+💡 使用 /sign 开始签到，成为排行榜第一名！
+            """
+        else:
+            # 获取当前用户排名
+            user_points_info = DB_MANAGER.get_user_points_info(user.id)
+            user_rank_num = user_points_info.get('rank', 0) if user_points_info else 0
+            
+            response = f"""
+🏆 *积分排行榜*
+
+🏅 *Top 10 签到达人*
+"""
+            
+            # 显示前10名
+            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+            for i, user_data in enumerate(top_users):
+                if i < len(medals):
+                    medal = medals[i]
+                else:
+                    medal = f"{i+1}."
+                
+                name = user_data['first_name'] or user_data['username'] or f"用户{user_data['user_id']}"
+                points = user_data['total_points']
+                streak = user_data['sign_in_streak']
+                
+                response += f"{medal} {name}: {points} 分"
+                if streak > 1:
+                    response += f" (🔥{streak}天)"
+                response += "\n"
+            
+            # 显示当前用户排名（如果不在前10）
+            if user_points_info and user_rank_num > 10:
+                user_points = user_points_info.get('total_points', 0)
+                response += f"\n📊 你的排名: 第 {user_rank_num} 名 ({user_points} 分)"
+            elif user_points_info:
+                response += f"\n📊 恭喜你在排行榜上！"
+        
+        response += "\n\n💡 每日签到可获得积分，连续签到有额外奖励！"
+        
+        await update.message.reply_text(response, parse_mode='Markdown')
+        
+        # 保存消息记录
+        if DB_MANAGER:
+            DB_MANAGER.save_message(user.id, update.effective_chat.id, '/rank', is_command=True)
+        
+    except Exception as e:
+        logger.error(f"❌ 查询排行榜失败: {e}")
+        await update.message.reply_text("❌ 查询排行榜失败，请稍后再试")
+
+# 12. 改进的智能回复函数
 async def smart_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理所有普通消息的智能回复"""
     user_message = update.message.text
@@ -311,7 +618,7 @@ async def smart_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(reply)
 
-# 10. 错误处理
+# 13. 错误处理
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理机器人错误"""
     logger.error(f"机器人错误: {context.error}")
@@ -324,7 +631,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-# 11. 主函数
+# 14. 主函数
 def main():
     global DB_MANAGER  # 修改点 5: 声明我们要修改全局变量 DB_MANAGER
 
@@ -357,6 +664,12 @@ def main():
         lambda update, context: update.message.reply_text(
             f"🕐 当前时间：{datetime.now().strftime('%H:%M:%S')}"
         )))
+    
+    # 新增积分命令
+    application.add_handler(CommandHandler("sign", sign_in_command))
+    application.add_handler(CommandHandler("points", points_command))
+    application.add_handler(CommandHandler("rank", rank_command))
+    application.add_handler(CommandHandler("leaderboard", rank_command))  # 别名
     
     # 消息处理器（放在最后，因为它是兜底的）
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_reply))
