@@ -10,8 +10,6 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
-# 删除顶部的错误导入语句：from database import DatabaseManager
-
 # 在 main() 函数开始处添加：
 def tcp_health_check():
     """简单的TCP健康检查服务器"""
@@ -32,7 +30,7 @@ tcp_thread.start()
 TOKEN = os.environ.get('TOKEN')
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# 修改点 1: 定义一个全局变量，用于存储数据库管理器
+# 定义一个全局变量，用于存储数据库管理器
 DB_MANAGER = None
 
 if not TOKEN:
@@ -64,10 +62,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
     # 保存用户信息到数据库
-    # 修改点 2: 检查 DATABASE_URL 和 DB_MANAGER 是否可用
     if DATABASE_URL and DB_MANAGER is not None:
         try:
-            DB_MANAGER.save_user({  # 修改点 3: 使用 DB_MANAGER 而非 DatabaseManager
+            DB_MANAGER.save_user({  
                 'id': user.id,
                 'username': user.username,
                 'first_name': user.first_name,
@@ -77,9 +74,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             })
             
             # 保存消息记录
-            DB_MANAGER.save_message(user.id, chat_id, '/start', is_command=True)  # 修改点
+            DB_MANAGER.save_message(user.id, chat_id, '/start', is_command=True)  
             # 更新命令统计
-            DB_MANAGER.update_command_stats(user.id, '/start')  # 修改点
+            DB_MANAGER.update_command_stats(user.id, '/start')  
             
             logger.info(f"✅ 用户 {user.id} ({user.username}) 启动机器人")
         except Exception as e:
@@ -112,7 +109,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
     
-    # 修改点 4: 统一使用 DB_MANAGER 和可用性检查
+    # 统一使用 DB_MANAGER 和可用性检查
     if DATABASE_URL and DB_MANAGER is not None:
         try:
             DB_MANAGER.save_message(user.id, chat_id, '/help', is_command=True)
@@ -182,17 +179,17 @@ async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text("🏓 Pong! 机器人正在运行！")
 
-# 6. 新增：处理 /stats 命令
+# 6. 处理 /stats 命令
 async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """查看用户统计"""
     user = update.effective_user
     
-    if not DATABASE_URL or DB_MANAGER is None:  # 修改点
+    if not DATABASE_URL or DB_MANAGER is None:  
         await update.message.reply_text("📊 数据库未配置或不可用，统计功能不可用")
         return
     
     try:
-        stats = DB_MANAGER.get_user_stats(user.id)  # 修改点
+        stats = DB_MANAGER.get_user_stats(user.id)  
         
         if stats:
             response = f"""
@@ -218,13 +215,13 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response, parse_mode='Markdown')
         
         # 记录此命令
-        DB_MANAGER.save_message(user.id, update.effective_chat.id, '/stats', is_command=True)  # 修改点
+        DB_MANAGER.save_message(user.id, update.effective_chat.id, '/stats', is_command=True)  
         
     except Exception as e:
         logger.error(f"❌ 获取统计失败: {e}")
         await update.message.reply_text("❌ 获取统计信息时出错")
 
-# 7. 新增：处理 /admin 命令（基础版）
+# 处理 /admin 命令（基础版）
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """管理员查看机器人统计"""
     user = update.effective_user
@@ -234,12 +231,12 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #     await update.message.reply_text("⛔ 权限不足")
     #     return
     
-    if not DATABASE_URL or DB_MANAGER is None:  # 修改点
+    if not DATABASE_URL or DB_MANAGER is None:  
         await update.message.reply_text("📊 数据库未配置或不可用，管理员功能不可用")
         return
     
     try:
-        bot_stats = DB_MANAGER.get_bot_stats()  # 修改点
+        bot_stats = DB_MANAGER.get_bot_stats()  
         
         response = f"""
 🤖 *机器人全局统计*
@@ -263,7 +260,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ 获取管理员统计失败: {e}")
         await update.message.reply_text("❌ 获取管理员统计时出错")
 
-# 8. 新增：处理 /echo 命令
+# 8. 处理 /echo 命令
 async def echo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """回声命令"""
     user = update.effective_user
@@ -272,14 +269,14 @@ async def echo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = ' '.join(context.args)
         await update.message.reply_text(f"🔊 回声: {text}")
         
-        if DATABASE_URL and DB_MANAGER is not None:  # 修改点
+        if DATABASE_URL and DB_MANAGER is not None:  
             try:
-                DB_MANAGER.save_message(user.id, update.effective_chat.id, f'/echo {text}', is_command=True)  # 修改点
+                DB_MANAGER.save_message(user.id, update.effective_chat.id, f'/echo {text}', is_command=True)  
             except Exception as e:
                 logger.error(f"❌ 数据库操作失败: {e}")
     else:
         await update.message.reply_text("用法: /echo <文本>")
-# 9. 新增：处理 /sign 命令 - 每日签到
+# 9. 处理 /sign 命令 - 每日签到
 async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /sign 命令 - 每日签到"""
     user = update.effective_user
@@ -327,7 +324,6 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 base_points = 1
                 bonus_points = points_awarded - base_points
                 
-                # 修改点 1: 修复响应字符串格式，移除多余字符和空格
                 response = f"""
 {streak_emoji} *签到成功！*
 
@@ -370,7 +366,6 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 last_sign = points_info.get('last_sign_in')
                 last_time = last_sign.strftime('%H:%M:%S') if last_sign else "未知时间"
                 
-                # 修改点 2: 修复失败响应格式
                 response = f"""
 ⏰ *签到提醒*
 
@@ -386,7 +381,7 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 response = f"❌ {message}"
         
-        # 修改点 3: 添加详细的成功日志记录
+        # 详细的成功日志记录
         logger.info(f"✅ 签到成功 - 用户: {user.id}, 响应长度: {len(response)}")
         
         await update.message.reply_text(response, parse_mode='Markdown')
@@ -400,7 +395,6 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ 用户信息 - ID: {user.id}, 用户名: {repr(user.username)}, 姓名: {repr(user.first_name)}")
 
         # 如果响应变量已定义，打印其内容
-        # 修改点 4: 改进错误日志记录，移除可能引起问题的 try-except
         if 'response' in locals():
             try:
                 response_preview = response[:50] if len(response) > 50 else response
@@ -408,11 +402,11 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as log_error:
                 logger.error(f"❌ 记录响应内容时出错: {log_error}")
     
-    # 修改点 5: 确保只在捕获到异常时才显示错误信息
+    # 确保只在捕获到异常时才显示错误信息
     if 'e' in locals():
         await update.message.reply_text("❌ 签到失败，系统错误，请稍后重试")
         
-# 10. 新增：处理 /points 命令 - 查看积分详情
+# 10. 处理 /points 命令 - 查看积分详情
 async def points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /points 命令 - 查看积分详情"""
     user = update.effective_user
@@ -513,7 +507,7 @@ async def points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ 查询积分失败: {e}")
         await update.message.reply_text("❌ 查询积分失败，请稍后再试")
 
-# 11. 新增：处理 /rank 命令 - 查看积分排行榜
+# 11. 处理 /rank 命令 - 查看积分排行榜
 async def rank_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /rank 命令 - 查看积分排行榜"""
     user = update.effective_user
@@ -581,14 +575,14 @@ async def rank_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ 查询排行榜失败: {e}")
         await update.message.reply_text("❌ 查询排行榜失败，请稍后再试")
 
-# 12. 新增：处理 /addpoints 命令 - 管理员添加积分
+# 12. 处理 /addpoints 命令 - 管理员添加积分
 async def add_points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """管理员添加积分（格式：/addpoints <用户ID> <积分> [原因]）"""
     user = update.effective_user
     chat_id = update.effective_chat.id
     
     # 权限检查（只允许特定管理员）
-    ADMIN_IDS = [8318755495]  # 修改点：这里换成你的Telegram ID
+    ADMIN_IDS = [8318755495]  
     if user.id not in ADMIN_IDS:
         await update.message.reply_text("⛔ 权限不足")
         return
@@ -649,13 +643,13 @@ async def add_points_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"❌ 调整积分失败: {e}")
         await update.message.reply_text(f"❌ 调整积分失败: {str(e)}")
 
-# 13. 新增：处理 /setpoints 命令 - 直接设置积分
+# 13. 处理 /setpoints 命令 - 直接设置积分
 async def set_points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """管理员设置积分（格式：/setpoints <用户ID> <积分>）"""
     user = update.effective_user
     chat_id = update.effective_chat.id
     
-    ADMIN_IDS = [8318755495]  # 修改点：这里换成你的Telegram ID
+    ADMIN_IDS = [8318755495]  
     if user.id not in ADMIN_IDS:
         await update.message.reply_text("⛔ 权限不足")
         return
@@ -773,7 +767,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # 15. 主函数
 def main():
-    global DB_MANAGER  # 修改点 5: 声明我们要修改全局变量 DB_MANAGER
+    global DB_MANAGER  
 
     print("🚀 正在启动机器人...")
     
@@ -782,7 +776,7 @@ def main():
         try:
             from database import DatabaseManager
             DatabaseManager.initialize()
-            DB_MANAGER = DatabaseManager  # 修改点 6: 将类赋值给全局变量
+            DB_MANAGER = DatabaseManager  
             print("✅ 数据库连接成功")
         except Exception as e:
             print(f"❌ 数据库初始化失败: {e}")
@@ -793,7 +787,7 @@ def main():
     # 创建应用
     application = Application.builder().token(TOKEN).build()
     
-    # 添加处理器
+    # 添加处理
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("ping", ping))
@@ -812,13 +806,13 @@ def main():
     application.add_handler(CommandHandler("leaderboard", rank_command))  # 别名
 
     # 新增积分管理命令
-    application.add_handler(CommandHandler("addpoints", add_points_command))  # 修改点：添加这行
-    application.add_handler(CommandHandler("setpoints", set_points_command))  # 修改点：添加这行
+    application.add_handler(CommandHandler("addpoints", add_points_command))  
+    application.add_handler(CommandHandler("setpoints", set_points_command))  
     
-    # 消息处理器（放在最后，因为它是兜底的）
+    # 消息处理（放在最后，因为它是兜底的）
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_reply))
     
-    # 错误处理器
+    # 错误处理
     application.add_error_handler(error_handler)
     
     print("=" * 50)
@@ -834,7 +828,7 @@ def main():
     )
     
     # 机器人停止时关闭数据库连接
-    if DB_MANAGER is not None:  # 修改点 7: 使用全局变量判断
+    if DB_MANAGER is not None:  
         DB_MANAGER.close_all_connections()
 
 if __name__ == '__main__':
