@@ -18,7 +18,6 @@ class DatabaseManager:
                 raise ValueError("DATABASE_URL环境变量未设置")
             
             # 解析Railway的DATABASE_URL
-            # 格式：postgresql://user:password@host:port/dbname
             cls._connection_pool = psycopg2.pool.SimpleConnectionPool(
                 1, 20, database_url, sslmode='require'
             )
@@ -617,3 +616,4 @@ class DatabaseManager:
             return False, f"设置积分失败: {str(e)}"
         finally:
             cls.return_connection(conn)
+
