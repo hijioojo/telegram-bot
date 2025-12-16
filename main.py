@@ -104,8 +104,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /rank - 查看积分排行榜
 
 💡 试试发送任意消息，我会回应你！
-客服@TelegramSheng
-客服@WIBSIBKB
     """
     await update.message.reply_text(welcome_text)
 
@@ -143,6 +141,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /echo <文本> - 回声测试
 /time - 显示当前时间
 
+👮 *管理员命令* (仅管理员可用)
+/addpoints <用户ID> <积分> [原因] - 调整用户积分
+/setpoints <用户ID> <积分> - 直接设置用户积分
+/admin - 查看机器人统计
+
 🎮 *积分规则*
 • 每日签到：+1 基础积分
 • 连续3天：额外 +1 积分
@@ -158,7 +161,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - 其他消息我会随机回复
 
 📞 *客服联系*
-@TelegramSheng
+@TelegranSheng
 @WIBSIBKB
 
 💡 *提示*：使用 /sign 开始你的签到之旅吧！
@@ -578,7 +581,127 @@ async def rank_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ 查询排行榜失败: {e}")
         await update.message.reply_text("❌ 查询排行榜失败，请稍后再试")
 
-# 12. 改进的智能回复函数
+# 12. 新增：处理 /addpoints 命令 - 管理员添加积分
+async def add_points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """管理员添加积分（格式：/addpoints <用户ID> <积分> [原因]）"""
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    
+    # 权限检查（只允许特定管理员）
+    ADMIN_IDS = [8318755495]  # 修改点：这里换成你的Telegram ID
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("⛔ 权限不足")
+        return
+    
+    if not DATABASE_URL or DB_MANAGER is None:
+        await update.message.reply_text("❌ 数据库未配置")
+        return
+    
+    # 检查参数
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "用法: /addpoints <用户ID> <积分> [原因]\n"
+            "示例: /addpoints 8318755495 100 活动奖励\n"
+            "示例: /addpoints 8318755495 -50 扣除违规积分"
+        )
+        return
+    
+    try:
+        target_user_id = int(context.args[0])
+        points = int(context.args[1])
+        reason = ' '.join(context.args[2:]) if len(context.args) > 2 else "管理员调整"
+        
+        # 调用积分修改方法
+        success, message = DB_MANAGER.add_points_to_user(target_user_id, points, reason)
+        
+        if success:
+            # 获取修改后的积分信息
+            points_info = DB_MANAGER.get_user_points_info(target_user_id)
+            
+            response = f"""
+✅ *积分调整成功*
+
+👤 目标用户ID: `{target_user_id}`
+💰 积分变动: **{points}** 分
+📝 原因: {reason}
+
+📊 *调整后状态*
+- 总积分: **{points_info.get('total_points', 0)}** 分
+- 签到次数: {points_info.get('sign_in_count', 0)} 次
+- 连续签到: {points_info.get('current_streak', 0)} 天
+
+⏰ 操作时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+👮 操作人: {user.first_name} (@{user.username})
+            """
+        else:
+            response = f"❌ {message}"
+        
+        await update.message.reply_text(response, parse_mode='Markdown')
+        
+        # 记录操作日志
+        DB_MANAGER.save_message(user.id, chat_id, 
+                               f'/addpoints {target_user_id} {points} {reason}', 
+                               is_command=True)
+        
+    except ValueError:
+        await update.message.reply_text("❌ 参数错误：用户ID和积分必须是数字")
+    except Exception as e:
+        logger.error(f"❌ 调整积分失败: {e}")
+        await update.message.reply_text(f"❌ 调整积分失败: {str(e)}")
+
+# 13. 新增：处理 /setpoints 命令 - 直接设置积分
+async def set_points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """管理员设置积分（格式：/setpoints <用户ID> <积分>）"""
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    
+    ADMIN_IDS = [8318755495]  # 修改点：这里换成你的Telegram ID
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("⛔ 权限不足")
+        return
+    
+    if not DATABASE_URL or DB_MANAGER is None:
+        await update.message.reply_text("❌ 数据库未配置")
+        return
+    
+    if len(context.args) < 2:
+        await update.message.reply_text("用法: /setpoints <用户ID> <积分>")
+        return
+    
+    try:
+        target_user_id = int(context.args[0])
+        points = int(context.args[1])
+        
+        # 调用设置积分方法
+        success, message = DB_MANAGER.set_user_points(target_user_id, points)
+        
+        if success:
+            response = f"""
+✅ *积分设置成功*
+
+👤 目标用户ID: `{target_user_id}`
+🎯 设置积分: **{points}** 分
+
+⏰ 操作时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+👮 操作人: {user.first_name}
+            """
+        else:
+            response = f"❌ {message}"
+        
+        await update.message.reply_text(response, parse_mode='Markdown')
+        
+        # 记录操作日志
+        DB_MANAGER.save_message(user.id, chat_id, 
+                               f'/setpoints {target_user_id} {points}', 
+                               is_command=True)
+        
+    except ValueError:
+        await update.message.reply_text("❌ 参数错误：用户ID和积分必须是数字")
+    except Exception as e:
+        logger.error(f"❌ 设置积分失败: {e}")
+        await update.message.reply_text(f"❌ 设置积分失败: {str(e)}")
+
+# 13. 改进的智能回复函数
 async def smart_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理所有普通消息的智能回复"""
     user_message = update.message.text
@@ -635,7 +758,7 @@ async def smart_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(reply)
 
-# 13. 错误处理
+# 14. 错误处理
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理机器人错误"""
     logger.error(f"机器人错误: {context.error}")
@@ -648,7 +771,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-# 14. 主函数
+# 15. 主函数
 def main():
     global DB_MANAGER  # 修改点 5: 声明我们要修改全局变量 DB_MANAGER
 
@@ -687,6 +810,10 @@ def main():
     application.add_handler(CommandHandler("points", points_command))
     application.add_handler(CommandHandler("rank", rank_command))
     application.add_handler(CommandHandler("leaderboard", rank_command))  # 别名
+
+    # 新增积分管理命令
+    application.add_handler(CommandHandler("addpoints", add_points_command))  # 修改点：添加这行
+    application.add_handler(CommandHandler("setpoints", set_points_command))  # 修改点：添加这行
     
     # 消息处理器（放在最后，因为它是兜底的）
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_reply))

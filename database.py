@@ -519,3 +519,101 @@ class DatabaseManager:
             return []
         finally:
             cls.return_connection(conn)
+
+    # ========== 新增：积分管理方法 ==========
+    
+    @classmethod
+    def add_points_to_user(cls, telegram_id: int, points: int, reason: str = "管理员调整"):
+        """为用户添加积分（可正可负）"""
+        conn = cls.get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            # 1. 确保用户存在
+            cursor.execute("""
+                INSERT INTO users (telegram_id, username, first_name, last_active)
+                VALUES (%s, 'admin_created', '用户', NOW())
+                ON CONFLICT (telegram_id) DO NOTHING
+            """, (telegram_id,))
+            
+            # 2. 插入积分变动记录
+            cursor.execute("""
+                INSERT INTO points_history (user_id, points_change, reason, description)
+                VALUES (%s, %s, 'admin_adjust', %s)
+            """, (telegram_id, points, f"管理员调整: {reason}"))
+            
+            # 3. 更新用户积分汇总
+            cursor.execute("""
+                INSERT INTO user_points (user_id, total_points, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (user_id) 
+                DO UPDATE SET
+                    total_points = user_points.total_points + EXCLUDED.total_points,
+                    updated_at = NOW()
+                RETURNING total_points
+            """, (telegram_id, points))
+            
+            result = cursor.fetchone()
+            new_total = result[0] if result else points
+            
+            conn.commit()
+            logger.info(f"✅ 管理员调整用户 {telegram_id} 积分 {points} 分，新总分: {new_total}")
+            return True, f"积分调整成功，新总分: {new_total} 分"
+            
+        except Exception as e:
+            logger.error(f"❌ 调整积分失败: {e}")
+            conn.rollback()
+            return False, f"调整积分失败: {str(e)}"
+        finally:
+            cls.return_connection(conn)
+    
+    @classmethod
+    def set_user_points(cls, telegram_id: int, points: int):
+        """直接设置用户积分（覆盖现有积分）"""
+        conn = cls.get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            # 1. 确保用户存在
+            cursor.execute("""
+                INSERT INTO users (telegram_id, username, first_name, last_active)
+                VALUES (%s, 'admin_created', '用户', NOW())
+                ON CONFLICT (telegram_id) DO NOTHING
+            """, (telegram_id,))
+            
+            # 2. 获取当前积分
+            cursor.execute("""
+                SELECT total_points FROM user_points WHERE user_id = %s
+            """, (telegram_id,))
+            
+            result = cursor.fetchone()
+            current_points = result[0] if result else 0
+            points_change = points - current_points
+            
+            # 3. 插入积分变动记录（如果积分有变化）
+            if points_change != 0:
+                cursor.execute("""
+                    INSERT INTO points_history (user_id, points_change, reason, description)
+                    VALUES (%s, %s, 'admin_set', '管理员直接设置积分')
+                """, (telegram_id, points_change))
+            
+            # 4. 设置用户积分
+            cursor.execute("""
+                INSERT INTO user_points (user_id, total_points, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (user_id) 
+                DO UPDATE SET
+                    total_points = EXCLUDED.total_points,
+                    updated_at = NOW()
+            """, (telegram_id, points))
+            
+            conn.commit()
+            logger.info(f"✅ 管理员设置用户 {telegram_id} 积分为 {points} 分")
+            return True, f"积分设置成功: {points} 分"
+            
+        except Exception as e:
+            logger.error(f"❌ 设置积分失败: {e}")
+            conn.rollback()
+            return False, f"设置积分失败: {str(e)}"
+        finally:
+            cls.return_connection(conn)
