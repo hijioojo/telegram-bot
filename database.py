@@ -314,6 +314,7 @@ class DatabaseManager:
             """, (telegram_id,))
             
             if cursor.fetchone():
+                logger.info(f"用户 {telegram_id} 今天已经签到过了")
                 return False, "今天已经签到过了，请明天再来！", 0
             
             # 2. 获取昨天的签到记录，计算连续签到
@@ -326,13 +327,12 @@ class DatabaseManager:
             
             # 3. 获取当前连续签到天数
             current_streak = 0
-            if signed_yesterday:
-                cursor.execute("""
-                    SELECT sign_in_streak FROM user_points 
-                    WHERE user_id = %s
-                """, (telegram_id,))
-                result = cursor.fetchone()
-                current_streak = result[0] if result else 0
+            cursor.execute("""
+                SELECT sign_in_streak FROM user_points 
+                WHERE user_id = %s
+            """, (telegram_id,))
+            result = cursor.fetchone()
+            current_streak = result[0] if result else 0
             
             # 4. 计算新的连续天数
             new_streak = current_streak + 1 if signed_yesterday else 1
@@ -349,9 +349,7 @@ class DatabaseManager:
             
             total_points = base_points + streak_bonus
             
-            # 6. 开始事务
-            conn.autocommit = False
-            
+            # 6. 使用独立的连接执行签到操作，避免事务冲突
             try:
                 # 6.1 插入签到记录
                 cursor.execute("""
@@ -399,9 +397,9 @@ class DatabaseManager:
                 return True, f"签到成功！获得 {total_points} 积分", total_points
                 
             except Exception as e:
+                logger.error(f"❌ 签到操作失败: {e}")
                 conn.rollback()
-                logger.error(f"❌ 签到事务失败: {e}")
-                return False, "签到失败，请稍后重试", 0
+                return False, f"签到失败: {str(e)}", 0
                 
         except Exception as e:
             logger.error(f"❌ 签到过程出错: {e}")
