@@ -390,8 +390,17 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"❌ 处理签到命令失败: {e}")
-        await update.message.reply_text("❌ 签到失败，系统错误，请稍后重试")
+        logger.error(f"❌ 用户信息 - ID: {user.id}, 用户名: {repr(user.username)}, 姓名: {repr(user.first_name)}")
 
+        # 如果响应变量已定义，打印其内容
+    try:
+        if 'response' in locals():
+            logger.error(f"❌ 响应内容前50字符: {repr(response[:50])}")
+            logger.error(f"❌ 响应内容完整: {repr(response)}")
+    except:
+        pass
+    
+    await update.message.reply_text("❌ 签到失败，系统错误，请稍后重试")
 # 10. 新增：处理 /points 命令 - 查看积分详情
 async def points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /points 命令 - 查看积分详情"""
