@@ -163,7 +163,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *提示*：使用 /sign 开始你的签到之旅吧！
     """
-    await update.message.reply_text(help_text, parse_mode='Markdown')
+    await update.message.reply_text(help_text, parse_mode='None')
 
 # 5. 处理 /ping 命令
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
