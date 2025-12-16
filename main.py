@@ -276,7 +276,6 @@ async def echo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"❌ 数据库操作失败: {e}")
     else:
         await update.message.reply_text("用法: /echo <文本>")
-
 # 9. 新增：处理 /sign 命令 - 每日签到
 async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /sign 命令 - 每日签到"""
@@ -325,25 +324,26 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 base_points = 1
                 bonus_points = points_awarded - base_points
                 
+                # 修改点 1: 修复响应字符串格式，移除多余字符和空格
                 response = f"""
 {streak_emoji} *签到成功！*
 
 👤 {user.first_name}，签到成功！
 
 💰 *积分详情*
-├ 基础奖励: +{base_points} 分
-{f"├ 连续签到奖励: +{bonus_points} 分" if bonus_points > 0 else ""}
-└ 本次获得: **+{points_awarded} 分**
+├ 基础奖励: +{base_points}分
+{f"├ 连续签到奖励: +{bonus_points}分" if bonus_points > 0 else ""}
+└ 本次获得: **+{points_awarded}分**
 
 📊 *签到统计*
-├ 当前积分: **{points_info.get('total_points', 0)} 分**
-├ 连续签到: {streak} 天 {streak_emoji}
-├ 总签到次数: {points_info.get('sign_in_count', 1)} 次
-└ 今日排名: 第 {points_info.get('rank', 1)} 名
+├ 当前积分: **{points_info.get('total_points', 0)}分**
+├ 连续签到: {streak}天 {streak_emoji}
+├ 总签到次数: {points_info.get('sign_in_count', 1)}次
+└ 今日排名: 第{points_info.get('rank', 1)}名
 
 ⏰ *时间信息*
 ├ 签到时间: {now.strftime('%Y-%m-%d %H:%M:%S')}
-└ 下次签到: 明天 {now.strftime('%H:%M')} 后
+└ 下次签到: 明天{now.strftime('%H:%M')}后
 
 {encouragement}
 
@@ -367,20 +367,24 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 last_sign = points_info.get('last_sign_in')
                 last_time = last_sign.strftime('%H:%M:%S') if last_sign else "未知时间"
                 
+                # 修改点 2: 修复失败响应格式
                 response = f"""
 ⏰ *签到提醒*
 
 {user.first_name}，你今天已经签到过了哦！
 
 📅 签到时间: {last_time}
-💰 当前积分: **{points_info.get('total_points', 0)} 分**
-🔥 连续签到: {points_info.get('current_streak', 0)} 天
+💰 当前积分: **{points_info.get('total_points', 0)}分**
+🔥 连续签到: {points_info.get('current_streak', 0)}天
 
 💡 明天记得再来签到！
 ⏳ 下次可签到: 明天 00:00 后
                 """
             else:
                 response = f"❌ {message}"
+        
+        # 修改点 3: 添加详细的成功日志记录
+        logger.info(f"✅ 签到成功 - 用户: {user.id}, 响应长度: {len(response)}")
         
         await update.message.reply_text(response, parse_mode='Markdown')
         
@@ -393,14 +397,18 @@ async def sign_in_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ 用户信息 - ID: {user.id}, 用户名: {repr(user.username)}, 姓名: {repr(user.first_name)}")
 
         # 如果响应变量已定义，打印其内容
-    try:
+        # 修改点 4: 改进错误日志记录，移除可能引起问题的 try-except
         if 'response' in locals():
-            logger.error(f"❌ 响应内容前50字符: {repr(response[:50])}")
-            logger.error(f"❌ 响应内容完整: {repr(response)}")
-    except:
-        pass
+            try:
+                response_preview = response[:50] if len(response) > 50 else response
+                logger.error(f"❌ 响应内容前50字符: {repr(response_preview)}")
+            except Exception as log_error:
+                logger.error(f"❌ 记录响应内容时出错: {log_error}")
     
-    await update.message.reply_text("❌ 签到失败，系统错误，请稍后重试")
+    # 修改点 5: 确保只在捕获到异常时才显示错误信息
+    if 'e' in locals():
+        await update.message.reply_text("❌ 签到失败，系统错误，请稍后重试")
+        
 # 10. 新增：处理 /points 命令 - 查看积分详情
 async def points_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /points 命令 - 查看积分详情"""
